@@ -12,9 +12,31 @@ module.exports.register = (app) => {
   // eslint-disable-next-line no-unused-vars
   app.event('app_mention', async ({ event, context, client, say }) => {
     // Acknowledge the action
-    await say(`<@${event.user}>님의 질문 "${event.text.replaceAll('<@U05VBG5DFKR>', '')}"에 대해 답변드리겠습니다.`);
+    await say(`<@${event.user}>님의 질문 "${event.text.replaceAll('<@U05VBG5DFKR>', '')}"에 대한 검색을 진행합니다.`);
     for await (const q of dummyQuestions) {
-      await say(`${q.title}\n\n[View Link](${q.link})`);
+      await say({
+        blocks: [{
+          type: "divider"
+          },
+          {
+          type: "section",
+          text: {
+            type: 'mrkdwn',
+            text: `${q.title}\n\n<${q.link}|View More>`
+          },
+          // accessory: {
+          //   type: "button",
+          //   text: {
+          //     "type": "plain_text",
+          //     "text": "Link",
+          //     "emoji": true
+          //   },
+          //   "value": q.title,
+          //   "url": q.link,
+          //   "action_id": "button-action-link"
+          // }
+        }]
+      });
     }
   });
 };
