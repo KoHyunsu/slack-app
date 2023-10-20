@@ -4,8 +4,6 @@ const orgInstall = require('./database/auth/store_user_org_install');
 const workspaceAuth = require('./database/auth/store_user_workspace_install');
 const db = require('./database/db');
 
-console.log(db);
-
 // const oauthRedirect = "https://slack.endpoint/slack/oauth_redirect"
 
 db.connect();
@@ -46,8 +44,8 @@ const app = new App({
   },
   installationStore: {
     storeInstallation: async (installation) => {
-      console.log('installation: ');
-      console.log(installation);
+      // console.log('installation: ');
+      // console.log(installation);
       if (
         installation.isEnterpriseInstall
         && installation.enterprise !== undefined
@@ -62,8 +60,8 @@ const app = new App({
       throw new Error('Failed saving installation data to installationStore');
     },
     fetchInstallation: async (installQuery) => {
-      console.log('installQuery');
-      console.log(installQuery);
+      // console.log('installQuery');
+      // console.log(installQuery);
       if (
         installQuery.isEnterpriseInstall
         && installQuery.enterpriseId !== undefined
