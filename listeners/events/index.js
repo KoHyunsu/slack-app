@@ -81,7 +81,6 @@ module.exports.register = (app) => {
 
       if (event?.files && event?.files.length > 0) {
         try {
-          console.log('event: ', event);
           await dynamoDBClient.send(new PutItemCommand({
             TableName: 'repost_statistics_table',
             Item: {
@@ -102,13 +101,16 @@ module.exports.register = (app) => {
           },
           responseType: 'arraybuffer',
         });
+
         try {
           await s3Client.send(new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: event.files[0].name,
             Body: res.data,
+            ContentType: 'binary',
+            CacheControl: 'max-age=172800',
           }));
-          await say(`${event.text.replaceAll('<@U05VBG5DFKR>', '')} \n\n[참고 이미지 링크](https://${BUCKET_NAME}.s3.amazonaws.com/${event.files[0].name})`);
+          await say(`${event.text.replaceAll('<@U05VBG5DFKR>', '')} \n\n[참고 이미지 링크](https://${BUCKET_NAME}.s3.amazonaws.com/${event.files[0].name.replaceAll(' ', '%20')})`);
         } catch (error) {
           await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
         }
