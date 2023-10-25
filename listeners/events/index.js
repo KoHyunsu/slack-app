@@ -6,6 +6,7 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { fromIni } = require('@aws-sdk/credential-provider-ini');
 const { appHomeOpenedCallback } = require('./app-home-opened');
+const fs = require('fs').promises;
 
 const BUCKET_NAME = 'icn16-slack-bot-files-bucket';
 const REGION = 'us-east-1';
@@ -13,6 +14,84 @@ const PROFILE = 'default';
 
 const s3Client = new S3Client({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
 const dynamoDBClient = new DynamoDBClient({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
+
+const getTags = async () => {
+  const tags = await fs.readFile(`${__dirname}/../../utils/tags.txt`, 'utf-8');
+  return tags.toString().split('\n');
+};
+
+const submitTemplate = (tags, question_description) => ({
+  blocks: [
+    {
+      block_id: 'question_title',
+      type: 'input',
+      element: {
+        type: 'plain_text_input',
+        action_id: 'plain_text_input-action',
+      },
+      label: {
+        type: 'plain_text',
+        text: '질문 제목을 작성해주세요 (최대 200자)',
+        emoji: true,
+      },
+    },
+    {
+      block_id: 'question_description',
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*질문 설명*\n"_${question_description}_"`,
+      },
+    },
+    {
+      block_id: 'tags',
+      type: 'input',
+      element: {
+        type: 'multi_static_select',
+        placeholder: {
+          type: 'plain_text',
+          text: '태그 목록',
+          emoji: true,
+        },
+        option_groups: Array.from({ length: parseInt(tags.length / 100, 10) + 1 }, () => 0).map((_, idx) => ({
+          label: {
+            type: 'plain_text',
+            text: `목록 ${idx + 1}`,
+          },
+          options: tags.slice(idx * 100, idx === parseInt(tags.length / 100, 10) ? (tags.length - 1) : ((idx + 1) * 100)).map((tag) => ({
+            text: {
+              type: 'plain_text',
+              text: `${tag}`,
+              emoji: true,
+            },
+            value: `${tag}`,
+          })),
+        })),
+        action_id: 'multi_static_select-action',
+      },
+      label: {
+        type: 'plain_text',
+        text: '1개 이상의 태그를 선택해주세요 (최대 5개)',
+        emoji: true,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '질문 제출하기',
+            emoji: true,
+          },
+          value: 'submit_question_button',
+          action_id: 'submit_quesiton',
+        },
+      ],
+    },
+  ],
+});
 
 const dummyQuestions = [
   { title: 'PythonSDK를 이용하여 RDS데이터베이스를 DynamoDB로 마이그레이션 하는 방법', link: 'https://repost.aws/ko/articles/ARAb4aeTJJScmlJwqEGGqK3Q/python-sdk%EB%A5%BC-%EC%9D%B4%EC%9A%A9%ED%95%98%EC%97%AC-rds%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%B2%A0%EC%9D%B4%EC%8A%A4%EB%A5%BC-dynamo-db%EB%A1%9C-%EB%A7%88%EC%9D%B4%EA%B7%B8%EB%A0%88%EC%9D%B4%EC%85%98-%ED%95%98%EB%8A%94-%EB%B0%A9%EB%B2%95' },
@@ -27,9 +106,21 @@ module.exports.register = (app) => {
   app.event('app_mention', async ({ event, context, client, say }) => {
     // Acknowledge the action
 
-    await say(`<@${event.user}>님의 질문 "${event.text.replaceAll('<@U05VBG5DFKR>', '')}"에 대한 검색을 진행합니다.`);
+    await say({
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<@${event.user}>님의 질문 "*${event.text.replaceAll('<@U05VBG5DFKR> ', '')}*"에 대한 검색을 진행합니다.`,
+          },
+        },
+      ],
+    });
 
     const filteredContents = [];
+
+    const tags = await getTags();
 
     try {
       await dynamoDBClient.send(new PutItemCommand({
@@ -49,18 +140,63 @@ module.exports.register = (app) => {
     if (filteredContents && filteredContents?.length > 0) {
       for await (const q of dummyQuestions) {
         await say({
-          blocks: [{
-            type: 'divider',
-          },
+          blocks: [
+            {
+              type: 'divider',
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `${q.title}\n\n<${q.link}|View More>`,
+              },
+            },
+          ],
+        });
+      }
+      await say({
+        blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `${q.title}\n\n<${q.link}|View More>`,
+              text: '저희 서비스가 마음에 드셨다면 별점을 남겨주세요',
             },
-          }],
-        });
-      }
+            accessory: {
+              type: 'static_select',
+              placeholder: {
+                type: 'plain_text',
+                text: '별점 선택',
+                emoji: true,
+              },
+              options: Array.from({ length: 5 }, (value, index) => ({
+                text: {
+                  type: 'plain_text',
+                  text: '⭐'.repeat(index + 1),
+                  emoji: true,
+                },
+                value: index + 1,
+              })),
+              action_id: 'rating_select-action',
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '제출',
+                  emoji: true,
+                },
+                value: 'rate_contents_button',
+                action_id: 'rate_contents',
+              },
+            ],
+          },
+        ],
+      });
     } else {
       await say('관련된 컨텐츠가 존재하지 않습니다. 새롭게 질문을 업로드하겠습니다.');
 
@@ -110,12 +246,15 @@ module.exports.register = (app) => {
             ContentType: 'binary',
             CacheControl: 'max-age=172800',
           }));
-          await say(`${event.text.replaceAll('<@U05VBG5DFKR>', '')} \n\n[참고 이미지 링크](https://${BUCKET_NAME}.s3.amazonaws.com/${event.files[0].name.replaceAll(' ', '%20')})`);
+
+          const question_description = `${event.text.replaceAll('<@U05VBG5DFKR> ', '')} \n\n[참고 이미지 링크](https://${BUCKET_NAME}.s3.amazonaws.com/${event.files[0].name.replaceAll(' ', '%20')})`;
+          await say(submitTemplate(tags, question_description));
         } catch (error) {
           await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
         }
       } else {
-        await say(`${event.text.replaceAll('<@U05VBG5DFKR>', '')}`);
+        const question_description = `${event.text.replaceAll('<@U05VBG5DFKR> ', '')}`;
+        await say(submitTemplate(tags, question_description));
       }
     }
   });
