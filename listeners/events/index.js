@@ -40,7 +40,7 @@ const submitTemplate = (tags, question_description) => ({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*질문 설명*\n"_${question_description}_"`,
+        text: `*질문 설명*\n"${question_description}"`,
       },
     },
     {
@@ -172,10 +172,10 @@ module.exports.register = (app) => {
               options: Array.from({ length: 5 }, (value, index) => ({
                 text: {
                   type: 'plain_text',
-                  text: '⭐'.repeat(index + 1),
+                  text: '⭐'.repeat(5 - index),
                   emoji: true,
                 },
-                value: index + 1,
+                value: `${index + 1}`,
               })),
               action_id: 'rating_select-action',
             },
@@ -190,8 +190,8 @@ module.exports.register = (app) => {
                   text: '제출',
                   emoji: true,
                 },
-                value: 'rate_contents_button',
-                action_id: 'rate_contents',
+                value: 'rate_submit_question_button',
+                action_id: 'rate_submit_question',
               },
             ],
           },
