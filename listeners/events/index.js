@@ -24,7 +24,7 @@ const getTags = async () => {
 
 const searchQuestion = async (question) => {
   const pageSize = 6;
-  const response = await axios.get(`${process.env.AWS_APIGATEWAY_URL}/search?keyword=${question}&pageSize=${pageSize}`);
+  const response = await axios.get(encodeURI(`${process.env.AWS_APIGATEWAY_URL}/search?keyword=${question}&pageSize=${pageSize}`));
   return response.data;
 };
 
@@ -129,7 +129,7 @@ module.exports.register = (app) => {
     });
 
     const searchResults = await searchQuestion(questionInput);
-    const filteredContents = searchResults.slice(0, -1);
+    const filteredContents = searchResults.length >= 2 ? searchResults.slice(0, -1) : [];
     const nextURL = searchResults[searchResults.length - 1].NextURL;
 
     const tags = await getTags();
@@ -168,7 +168,13 @@ module.exports.register = (app) => {
       }
       await say({
         blocks: [
-          {
+          (nextURL === 'end' ? {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "마지막 질문까지 조회했습니다."
+            }
+          } : {
             block_id: 'more_questions',
             type: 'section',
             text: {
@@ -176,16 +182,16 @@ module.exports.register = (app) => {
               text: '검색 결과를 더 불러오시겠습니까?',
             },
             accessory: {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '추가 조회',
-                emoji: true,
-              },
-              value: `${nextURL}`,
-              action_id: 'more_question_button-action',
-            },
-          },
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '추가 조회',
+                  emoji: true,
+                },
+                value: `${nextURL}`,
+                action_id: 'more_question_button-action',
+            }
+          }),
           {
             block_id: 'new_question',
             type: 'section',
