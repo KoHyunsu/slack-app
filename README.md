@@ -1,12 +1,44 @@
-# slack-app
+# [re:Post SlackBot] Slack App
 
-### Requirements
+KR re:Post Slack App developed using Slack Bolt (Javascript)
+
+### Prerequisite
 - [node.js](https://nodejs.org/en)
+- Create MongoDB Cluster `cluster001`, User, and Database
+- `aws configure`
+  - Default Region : `us-east-1`
+  - Default Profile : `default`
 - Fill env file and change its name 
-    - (Linux, MacOS) `.sample.env` -> `.env` 
-    - (Windows) `sample.env.bat` -> `env.bat`
+  - (Linux, MacOS) `.sample.env` -> `.env` 
+  - (Windows) `sample.env.bat` -> `env.bat`
 
-### Preparatoin
+## Structure
+```
+.
+├──  app.js
+├──  package.json
+├──  package-lock.json
+├──  sample.env.bat
+├──  sample.env
+├──  Dockerfile
+├──  LICENSE
+├──  README.md
+├──  public
+|     └── cat.png
+├──  utils
+|     └── tags.txt
+├──  database
+|     ├── auth/
+|     └── db.js
+└──  listeners
+      ├── actions
+      |    └── index.js
+      ├── events
+      |    └── index.js
+      └── index.js
+```
+
+### Installation
 ```bash
 npm install
 

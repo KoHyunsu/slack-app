@@ -1,18 +1,14 @@
-/* eslint-disable no-restricted-syntax */
 /* eslint-disable max-len */
-/* eslint-disable import/no-extraneous-dependencies */
+/* eslint-disable no-restricted-syntax */
 const axios = require('axios');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { fromIni } = require('@aws-sdk/credential-provider-ini');
-const { appHomeOpenedCallback } = require('./app-home-opened');
 const fs = require('fs').promises;
 
-const botUserId = 'U05VBG5DFKR';
-
-const BUCKET_NAME = 'icn16-slack-bot-files-bucket';
-const REGION = 'us-east-1';
-const PROFILE = 'default';
+const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
+const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
 
 const s3Client = new S3Client({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
 const dynamoDBClient = new DynamoDBClient({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
@@ -28,7 +24,8 @@ const searchQuestion = async (question) => {
   return response.data;
 };
 
-const submitTemplate = (tags, question_description) => ({
+const submitTemplate = (tags, question_description, event_ts) => ({
+  thread_ts: event_ts,
   blocks: [
     {
       block_id: 'question_title',
@@ -101,19 +98,9 @@ const submitTemplate = (tags, question_description) => ({
   ],
 });
 
-// const dummyQuestions = [
-//   { title: 'PythonSDK를 이용하여 RDS데이터베이스를 DynamoDB로 마이그레이션 하는 방법', link: 'https://repost.aws/ko/articles/ARAb4aeTJJScmlJwqEGGqK3Q/python-sdk%EB%A5%BC-%EC%9D%B4%EC%9A%A9%ED%95%98%EC%97%AC-rds%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%B2%A0%EC%9D%B4%EC%8A%A4%EB%A5%BC-dynamo-db%EB%A1%9C-%EB%A7%88%EC%9D%B4%EA%B7%B8%EB%A0%88%EC%9D%B4%EC%85%98-%ED%95%98%EB%8A%94-%EB%B0%A9%EB%B2%95' },
-//   { title: 'ECS (FARGATE) TASK 작업개수 리소스 제한 질문입니다.', link: 'https://repost.aws/ko/questions/QUHvNZs5YJQWKVFRXQ3iAPHA/ecs-fargate-task-%EC%9E%91%EC%97%85%EA%B0%9C%EC%88%98-%EB%A6%AC%EC%86%8C%EC%8A%A4-%EC%A0%9C%ED%95%9C-%EC%A7%88%EB%AC%B8%EC%9E%85%EB%8B%88%EB%8B%A4' },
-//   { title: 'S3 삭제 Access Denied', link: 'https://repost.aws/ko/questions/QUawgxHE85ReueNlROb8BosA/s-3-%EC%82%AD%EC%A0%9C-access-denied#AN0OU01PUjR-GH9B3QNNiJ7w' },
-//   { title: '접속이 잘되던 ssh 가 접속이 갑자기 안됩니다. Permission denied (publickey,gssapi-keyex,gssapi-with-mic).', link: 'https://repost.aws/ko/questions/QU5aYqBcIUT_iAepA0pvHK7A/%EC%A0%91%EC%86%8D%EC%9D%B4-%EC%9E%98%EB%90%98%EB%8D%98-ssh-%EA%B0%80-%EC%A0%91%EC%86%8D%EC%9D%B4-%EA%B0%91%EC%9E%90%EA%B8%B0-%EC%95%88%EB%90%A9%EB%8B%88%EB%8B%A4-permission-denied-publickey-gssapi-keyex-gssapi-with-mic#ANrk3sq7KMTD2n8Z4TtQ4cLA' },
-// ];
-
 module.exports.register = (app) => {
-  app.event('app_home_opened', appHomeOpenedCallback);
-  // eslint-disable-next-line no-unused-vars
-  app.event('app_mention', async ({ event, context, client, say }) => {
-    // Acknowledge the action
-
+  app.event('app_mention', async ({ event, context, say }) => {
+    const { botUserId } = context;
     const questionInput = event.text.replaceAll(`<@${botUserId}> `, '');
 
     await say({
@@ -126,6 +113,7 @@ module.exports.register = (app) => {
           },
         },
       ],
+      thread_ts: event.event_ts,
     });
 
     const searchResults = await searchQuestion(questionInput);
@@ -146,7 +134,18 @@ module.exports.register = (app) => {
         },
       }));
     } catch (error) {
-      await say(`질문 검색 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `질문 검색 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: event.event_ts,
+      });
     }
 
     if (filteredContents && filteredContents?.length > 0) {
@@ -164,16 +163,17 @@ module.exports.register = (app) => {
               },
             },
           ],
+          thread_ts: event.event_ts,
         });
       }
       await say({
         blocks: [
           (nextURL === 'end' ? {
-            type: "section",
+            type: 'section',
             text: {
-              type: "mrkdwn",
-              text: "마지막 질문까지 조회했습니다."
-            }
+              type: 'mrkdwn',
+              text: '마지막 질문까지 조회했습니다.',
+            },
           } : {
             block_id: 'more_questions',
             type: 'section',
@@ -182,15 +182,15 @@ module.exports.register = (app) => {
               text: '검색 결과를 더 불러오시겠습니까?',
             },
             accessory: {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: '추가 조회',
-                  emoji: true,
-                },
-                value: `${nextURL}`,
-                action_id: 'more_question_button-action',
-            }
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '추가 조회',
+                emoji: true,
+              },
+              value: `${nextURL}`,
+              action_id: 'more_question_button-action',
+            },
           }),
           {
             block_id: 'new_question',
@@ -252,9 +252,21 @@ module.exports.register = (app) => {
             ],
           },
         ],
+        thread_ts: event.event_ts,
       });
     } else {
-      await say('관련된 컨텐츠가 존재하지 않습니다. 새롭게 질문을 업로드하겠습니다.');
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '관련된 컨텐츠가 존재하지 않습니다. 새롭게 질문을 업로드하겠습니다.',
+            },
+          },
+        ],
+        thread_ts: event.event_ts,
+      });
 
       try {
         await dynamoDBClient.send(new PutItemCommand({
@@ -268,7 +280,18 @@ module.exports.register = (app) => {
           },
         }));
       } catch (error) {
-        await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
+        await say({
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `질문 업로드 도중 오류가 발생하였습니다. ${error}`,
+              },
+            },
+          ],
+          thread_ts: event.event_ts,
+        });
       }
 
       if (event?.files && event?.files.length > 0) {
@@ -284,7 +307,18 @@ module.exports.register = (app) => {
             },
           }));
         } catch (error) {
-          await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
+          await say({
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `질문 업로드 도중 오류가 발생하였습니다. ${error}`,
+                },
+              },
+            ],
+            thread_ts: event.event_ts,
+          });
         }
 
         const res = await axios.get(event?.files[0].url_private, {
@@ -304,13 +338,24 @@ module.exports.register = (app) => {
           }));
 
           const question_description = `${event.text.replaceAll(`<@${botUserId}> `, '')} \n\n[참고 이미지 링크](https://${BUCKET_NAME}.s3.amazonaws.com/${event.files[0].name.replaceAll(' ', '%20')})`;
-          await say(submitTemplate(tags, question_description));
+          await say(submitTemplate(tags, question_description, event.event_ts));
         } catch (error) {
-          await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
+          await say({
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `질문 업로드 도중 오류가 발생하였습니다. ${error}`,
+                },
+              },
+            ],
+            thread_ts: event.event_ts,
+          });
         }
       } else {
         const question_description = `${event.text.replaceAll(`<@${botUserId}> `, '')}`;
-        await say(submitTemplate(tags, question_description));
+        await say(submitTemplate(tags, question_description, event.event_ts));
       }
     }
   });

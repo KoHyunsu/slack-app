@@ -1,11 +1,13 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable max-len */
+/* eslint-disable no-restricted-syntax */
 const axios = require('axios');
 const fs = require('fs').promises;
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { fromIni } = require('@aws-sdk/credential-provider-ini');
-const { sampleActionCallback } = require('./sample-action');
 
-const REGION = 'us-east-1';
-const PROFILE = 'default';
+const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
 const dynamoDBClient = new DynamoDBClient({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
 
 const postQuestion = async (question_title, question_description, tags) => {
@@ -22,7 +24,8 @@ const getTags = async () => {
   return tags.toString().split('\n');
 };
 
-const submitTemplate = (tags, question_description) => ({
+const submitTemplate = (tags, question_description, event_ts) => ({
+  thread_ts: event_ts,
   blocks: [
     {
       block_id: 'question_title',
@@ -96,8 +99,7 @@ const submitTemplate = (tags, question_description) => ({
 });
 
 module.exports.register = (app) => {
-  app.action('sample_action_id', sampleActionCallback);
-  app.action('submit_quesiton', async ({ ack, client, body, say, event }) => {
+  app.action('submit_quesiton', async ({ ack, body, say }) => {
     try {
       await ack();
 
@@ -105,15 +107,7 @@ module.exports.register = (app) => {
       const question_description = body.message.blocks[1].text.text.slice(9, -1);
       const tags = body.state.values.tags['multi_static_select-action'].selected_options.map((tag) => (tag.text.text.replaceAll('\r', '')));
 
-      console.log('title: ', question_title);
-      console.log('description: ', question_description);
-      console.log('tags: ', tags);
-
-      // const responseData = await postQuestion(question_title, question_description, tags);
-      const responseData = {
-        question_link: 'https://repost.aws/questions/QUQ1VQ5P1cTQOd5aaG1Im7EA/%EC%95%88%EB%93%9C%EB%A1%9C%EC%9D%B4%EB%93%9C-amplify-%EB%9D%BC%EC%9D%B4%EB%B8%8C%EB%9F%AC%EB%A6%AC-v-1-v-2-%EB%A7%88%EC%9D%B4%EA%B7%B8%EB%9E%98%EC%9D%B4%EC%85%98?sc_ichannel=ha&sc_ilang=en&sc_isite=repost&sc_iplace=hp&sc_icontent=QUQ1VQ5P1cTQOd5aaG1Im7EA&sc_ipos=2',
-      };
-
+      const responseData = await postQuestion(question_title, question_description, tags);
       await say({
         blocks: [
           {
@@ -124,6 +118,7 @@ module.exports.register = (app) => {
             },
           },
         ],
+        thread_ts: body.message.thread_ts,
       });
 
       await say({
@@ -170,12 +165,24 @@ module.exports.register = (app) => {
             ],
           },
         ],
+        thread_ts: body.message.thread_ts,
       });
     } catch (error) {
-      await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `질문 업로드 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     }
   });
-  app.action('prepare_submit_question', async ({ ack, client, context, body, say, event }) => {
+  app.action('prepare_submit_question', async ({ ack, context, body, say }) => {
     try {
       await ack();
 
@@ -187,18 +194,29 @@ module.exports.register = (app) => {
           channel: { S: body?.channel?.id },
           user: { S: body?.message?.user },
           createdAt: { S: new Date() },
-        }
+        },
       }));
 
       const question_description = body.actions[0].value;
 
       const tags = await getTags();
-      await say(submitTemplate(tags, question_description));
+      await say(submitTemplate(tags, question_description, body.message.thread_ts));
     } catch (error) {
-      await say(`질문 업로드 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `질문 업로드 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     }
   });
-  app.action('rate_submit_question', async ({ ack, client, context, body, say, event }) => {
+  app.action('rate_submit_question', async ({ ack, context, body, say }) => {
     try {
       await ack();
 
@@ -213,15 +231,37 @@ module.exports.register = (app) => {
           user: { S: body?.message?.user },
           score: { N: scoreInput },
           createdAt: { S: new Date() },
-        }
+        },
       }));
 
-      await say('질문 업로드에 대한 별점 올리기가 완료되었습니다.');
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '질문 업로드에 대한 별점 올리기가 완료되었습니다.',
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     } catch (error) {
-      await say(`별점 올리기 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `별점 올리기 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     }
   });
-  app.action('rate', async ({ ack, client, context, body, say, event }) => {
+  app.action('rate', async ({ ack, context, body, say }) => {
     try {
       await ack();
 
@@ -236,15 +276,37 @@ module.exports.register = (app) => {
           user: { S: body?.message?.user },
           score: { N: scoreInput },
           createdAt: { S: new Date() },
-        }
+        },
       }));
 
-      await say('질문 검색에 대한 별점 올리기가 완료되었습니다.');
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '질문 업로드에 대한 별점 올리기가 완료되었습니다.',
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     } catch (error) {
-      await say(`별점 올리기 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `별점 올리기 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     }
   });
-  app.action('more_question_button-action', async ({ ack, client, body, say, event }) => {
+  app.action('more_question_button-action', async ({ ack, event, body, say }) => {
     try {
       await ack();
       const currentURL = body.actions[0].value;
@@ -268,16 +330,17 @@ module.exports.register = (app) => {
               },
             },
           ],
+          thread_ts: body.message.thread_ts,
         });
       }
       await say({
         blocks: [
           (nextURL === 'end' ? {
-            type: "section",
+            type: 'section',
             text: {
-              type: "mrkdwn",
-              text: "마지막 질문까지 조회했습니다."
-            }
+              type: 'mrkdwn',
+              text: '마지막 질문까지 조회했습니다.',
+            },
           } : {
             block_id: 'more_questions',
             type: 'section',
@@ -286,15 +349,15 @@ module.exports.register = (app) => {
               text: '검색 결과를 더 불러오시겠습니까?',
             },
             accessory: {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: '추가 조회',
-                  emoji: true,
-                },
-                value: `${nextURL}`,
-                action_id: 'more_question_button-action',
-            }
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '추가 조회',
+                emoji: true,
+              },
+              value: `${nextURL}`,
+              action_id: 'more_question_button-action',
+            },
           }),
           {
             block_id: 'new_question',
@@ -356,10 +419,21 @@ module.exports.register = (app) => {
             ],
           },
         ],
+        thread_ts: body.message.thread_ts,
       });
-
     } catch (error) {
-      await say(`검색 도중 오류가 발생하였습니다. ${error}`);
+      await say({
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `검색 도중 오류가 발생하였습니다. ${error}`,
+            },
+          },
+        ],
+        thread_ts: body.message.thread_ts,
+      });
     }
   });
 };
