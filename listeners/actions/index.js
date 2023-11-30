@@ -4,11 +4,11 @@
 const axios = require('axios');
 const fs = require('fs').promises;
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { fromIni } = require('@aws-sdk/credential-provider-ini');
+// const { fromIni } = require('@aws-sdk/credential-provider-ini');
 
 const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
-const dynamoDBClient = new DynamoDBClient({ region: REGION, credentials: fromIni({ profile: PROFILE }) });
+// const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
+const dynamoDBClient = new DynamoDBClient({ region: REGION/*, credentials: fromIni({ profile: PROFILE })*/ });
 
 const postQuestion = async (question_title, question_description, tags) => {
   const response = await axios.post(`${process.env.AWS_CLOUDFRONT_URL}/questions`, {

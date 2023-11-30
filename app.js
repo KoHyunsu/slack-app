@@ -3,6 +3,13 @@ const { registerListeners } = require('./listeners');
 const orgInstall = require('./database/auth/store_user_org_install');
 const workspaceAuth = require('./database/auth/store_user_workspace_install');
 const db = require('./database/db');
+const AWS = require('aws-sdk');
+
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1',
+})
 
 // Connect Database
 db.connect();
