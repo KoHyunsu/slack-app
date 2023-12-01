@@ -10,8 +10,8 @@ const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
 // const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
 
-const s3Client = new S3Client({ region: REGION/*, credentials: fromIni({ profile: PROFILE })*/ });
-const dynamoDBClient = new DynamoDBClient({ region: REGION/*, credentials: fromIni({ profile: PROFILE })*/ });
+const s3Client = new S3Client({ region: REGION });
+const dynamoDBClient = new DynamoDBClient({ region: REGION });
 
 const getTags = async () => {
   const tags = await fs.readFile(`${__dirname}/../../utils/tags.txt`, 'utf-8');
