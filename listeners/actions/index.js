@@ -9,7 +9,7 @@ const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const dynamoDBClient = new DynamoDBClient({ region: REGION });
 
 const postQuestion = async (question_title, question_description, tags) => {
-  const response = await axios.post(`${process.env.AWS_CLOUDFRONT_URL}/questions`, {
+  const response = await axios.post(`${process.env.POST_QUESTION_URL}/questions`, {
     question_title,
     question_description,
     tags,

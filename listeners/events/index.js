@@ -3,15 +3,15 @@
 const axios = require('axios');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-// const { fromIni } = require('@aws-sdk/credential-provider-ini');
+const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 const fs = require('fs').promises;
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 const REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-// const PROFILE = process.env.AWS_DEFAULT_PROFILE || 'default';
 
 const s3Client = new S3Client({ region: REGION });
 const dynamoDBClient = new DynamoDBClient({ region: REGION });
+const secretsManagerClient = new SecretsManagerClient({ region: REGION });
 
 const getTags = async () => {
   const tags = await fs.readFile(`${__dirname}/../../utils/tags.txt`, 'utf-8');
@@ -20,7 +20,7 @@ const getTags = async () => {
 
 const searchQuestion = async (question) => {
   const pageSize = 6;
-  const response = await axios.get(encodeURI(`${process.env.AWS_APIGATEWAY_URL}/search?keyword=${question}&pageSize=${pageSize}`));
+  const response = await axios.get(encodeURI(`${process.env.SEARCH_QUESTION_URL}/search?keyword=${question}&pageSize=${pageSize}`));
   return response.data;
 };
 
@@ -321,9 +321,16 @@ module.exports.register = (app) => {
           });
         }
 
+        const secretsManagerResponse = await secretsManagerClient.send(
+          new GetSecretValueCommand({
+            SecretId: process.env.AWS_SECRET_NAME,
+            VersionStage: 'AWSCURRENT',
+          }),
+        );
+
         const res = await axios.get(event?.files[0].url_private, {
           headers: {
-            Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+            Authorization: `Bearer ${secretsManagerResponse.SecretString.SLACK_BOT_TOKEN || process.env.SLACK_BOT_TOKEN}`,
           },
           responseType: 'arraybuffer',
         });
